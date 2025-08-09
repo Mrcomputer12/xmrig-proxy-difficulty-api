@@ -262,34 +262,23 @@ void xmrig::ApiRouter::getDiffStats(rapidjson::Value& reply, rapidjson::Document
     Value workers(kArrayType);
 
     std::unique_lock<std::mutex> lock(userStatsMutex);
-    auto miners = static_cast<Controller*>(m_base)->miners();
 
-    for (const xmrig::Miner* miner : miners) {
-        const xmrig::String& login = miner->user();
-        if (login.isNull()) {
-            continue;
-        }
+    // Iterate over all stored difficulty stats
+    for (const auto& diffEntry : userDifficultyTotal)
+    {
+        const std::string& loginKey = diffEntry.first;
+        uint64_t totalDifficulty = diffEntry.second;
 
-        // Use login as the key (matching the submit function logic)
-        std::string loginKey = std::string(login.data());
+        // Get accepted shares count for this login
+        auto sharesIt = userAcceptedShares.find(loginKey);
+        uint64_t acceptedShares = (sharesIt != userAcceptedShares.end()) ? sharesIt->second : 0;
 
-        // Look up stats using login as key
-        auto diffIt = userDifficultyTotal.find(loginKey);
-        if (diffIt != userDifficultyTotal.end()) {
-            Value worker(kObjectType);
+        Value worker(kObjectType);
+        worker.AddMember("login", StringRef(loginKey.c_str()), allocator);
+        worker.AddMember("total_difficulty", totalDifficulty, allocator);
+        worker.AddMember("accepted_shares", acceptedShares, allocator);
 
-            uint64_t totalDifficulty = diffIt->second;
-
-            // Get accepted shares count
-            auto sharesIt = userAcceptedShares.find(loginKey);
-            uint64_t acceptedShares = (sharesIt != userAcceptedShares.end()) ? sharesIt->second : 0;
-
-            worker.AddMember("login", StringRef(login.data()), allocator);
-            worker.AddMember("total_difficulty", totalDifficulty, allocator);
-            worker.AddMember("accepted_shares", acceptedShares, allocator);
-
-            workers.PushBack(worker, allocator);
-        }
+        workers.PushBack(worker, allocator);
     }
 
     lock.unlock();
