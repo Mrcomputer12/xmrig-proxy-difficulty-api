@@ -3,18 +3,18 @@
  * Copyright (c) 2018-2024 SChernykh   <https://github.com/SChernykh>
  * Copyright (c) 2016-2024 XMRig       <https://github.com/xmrig>, <support@xmrig.com>
  *
- *   This program is free software: you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License as published by
- *   the Free Software Foundation, either version 3 of the License, or
- *   (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *   GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <cassert>
@@ -51,6 +51,7 @@
 #include "base/tools/cryptonote/BlobReader.h"
 #include "base/tools/Cvt.h"
 #include "net/JobResult.h"
+#include "stats/UserStats.h"
 
 
 #ifdef _MSC_VER
@@ -60,13 +61,13 @@
 
 namespace xmrig {
 
-Storage<Client> Client::m_storage;
+    Storage<Client> Client::m_storage;
 
 } /* namespace xmrig */
 
 
 #ifdef APP_DEBUG
-static const char *states[] = {
+static const char* states[] = {
     "unconnected",
     "host-lookup",
     "connecting",
@@ -77,7 +78,7 @@ static const char *states[] = {
 #endif
 
 
-xmrig::Client::Client(int id, const char *agent, IClientListener *listener) :
+xmrig::Client::Client(int id, const char* agent, IClientListener* listener) :
     BaseClient(id, listener),
     m_agent(agent),
     m_sendBuf(1024),
@@ -97,8 +98,8 @@ xmrig::Client::~Client()
 bool xmrig::Client::disconnect()
 {
     m_keepAlive = 0;
-    m_expire    = 0;
-    m_failures  = -1;
+    m_expire = 0;
+    m_failures = -1;
 
     return close();
 }
@@ -114,7 +115,7 @@ bool xmrig::Client::isTLS() const
 }
 
 
-const char *xmrig::Client::tlsFingerprint() const
+const char* xmrig::Client::tlsFingerprint() const
 {
 #   ifdef XMRIG_FEATURE_TLS
     if (isTLS() && m_pool.fingerprint() == nullptr) {
@@ -126,7 +127,7 @@ const char *xmrig::Client::tlsFingerprint() const
 }
 
 
-const char *xmrig::Client::tlsVersion() const
+const char* xmrig::Client::tlsVersion() const
 {
 #   ifdef XMRIG_FEATURE_TLS
     if (isTLS()) {
@@ -138,7 +139,7 @@ const char *xmrig::Client::tlsVersion() const
 }
 
 
-int64_t xmrig::Client::send(const rapidjson::Value &obj, Callback callback)
+int64_t xmrig::Client::send(const rapidjson::Value& obj, Callback callback)
 {
     assert(obj["id"] == sequence());
 
@@ -148,7 +149,7 @@ int64_t xmrig::Client::send(const rapidjson::Value &obj, Callback callback)
 }
 
 
-int64_t xmrig::Client::send(const rapidjson::Value &obj)
+int64_t xmrig::Client::send(const rapidjson::Value& obj)
 {
     using namespace rapidjson;
 
@@ -169,14 +170,14 @@ int64_t xmrig::Client::send(const rapidjson::Value &obj)
     }
 
     memcpy(m_sendBuf.data(), buffer.GetString(), size);
-    m_sendBuf[size]     = '\n';
+    m_sendBuf[size] = '\n';
     m_sendBuf[size + 1] = '\0';
 
     return send(size + 1);
 }
 
 
-int64_t xmrig::Client::submit(const JobResult &result)
+int64_t xmrig::Client::submit(const JobResult& result)
 {
 #   ifndef XMRIG_PROXY_PROJECT
     if (result.clientId != m_rpcId || m_rpcId.isNull() || m_state != ConnectedState) {
@@ -186,21 +187,25 @@ int64_t xmrig::Client::submit(const JobResult &result)
 
     if (result.diff == 0) {
         close();
-
         return -1;
     }
+
+    const uint64_t difficulty = result.actualDiff();
+
+    // Use rigId as the map key, fall back to actualClientLogin if rigId is empty
+    
 
     using namespace rapidjson;
 
 #   ifdef XMRIG_PROXY_PROJECT
-    const char *nonce = result.nonce;
-    const char *data  = result.result;
+    const char* nonce = result.nonce;
+    const char* data = result.result;
 #   else
-    char *nonce = m_tempBuf.data();
-    char *data  = m_tempBuf.data() + 16;
-    char *signature = m_tempBuf.data() + 88;
+    char* nonce = m_tempBuf.data();
+    char* data = m_tempBuf.data() + 16;
+    char* signature = m_tempBuf.data() + 88;
 
-    Cvt::toHex(nonce, sizeof(uint32_t) * 2 + 1, reinterpret_cast<const uint8_t *>(&result.nonce), sizeof(uint32_t));
+    Cvt::toHex(nonce, sizeof(uint32_t) * 2 + 1, reinterpret_cast<const uint8_t*>(&result.nonce), sizeof(uint32_t));
     Cvt::toHex(data, 65, result.result(), 32);
 
     if (result.minerSignature()) {
@@ -209,21 +214,22 @@ int64_t xmrig::Client::submit(const JobResult &result)
 #   endif
 
     Document doc(kObjectType);
-    auto &allocator = doc.GetAllocator();
+    auto& allocator = doc.GetAllocator();
 
     Value params(kObjectType);
-    params.AddMember("id",     StringRef(m_rpcId.data()), allocator);
+    params.AddMember("id", StringRef(m_rpcId.data()), allocator);
     params.AddMember("job_id", StringRef(result.jobId.data()), allocator);
-    params.AddMember("nonce",  StringRef(nonce), allocator);
+    params.AddMember("nonce", StringRef(nonce), allocator);
     params.AddMember("result", StringRef(data), allocator);
 
+#   ifdef XMRIG_PROXY_PROJECT
+    if (result.sig) {
+        params.AddMember("sig", StringRef(result.sig), allocator);
+    }
+#   endif
 #   ifndef XMRIG_PROXY_PROJECT
     if (result.minerSignature()) {
         params.AddMember("sig", StringRef(signature), allocator);
-    }
-#   else
-    if (result.sig) {
-        params.AddMember("sig", StringRef(result.sig), allocator);
     }
 #   endif
 
@@ -262,9 +268,12 @@ void xmrig::Client::connect()
 }
 
 
-void xmrig::Client::connect(const Pool &pool)
+void xmrig::Client::connect(const Pool& pool)
 {
-    setPool(pool);
+    m_pool = pool;
+    m_user = m_pool.user();
+    m_poolLoginUser = m_pool.user();
+
     connect();
 }
 
@@ -307,7 +316,7 @@ void xmrig::Client::tick(uint64_t now)
 }
 
 
-void xmrig::Client::onResolved(const DnsRecords &records, int status, const char *error)
+void xmrig::Client::onResolved(const DnsRecords& records, int status, const char* error)
 {
     m_dns.reset();
 
@@ -324,7 +333,7 @@ void xmrig::Client::onResolved(const DnsRecords &records, int status, const char
         return reconnect();
     }
 
-    const auto &record = records.get();
+    const auto& record = records.get();
     m_ip = record.ip();
 
     connect(record.addr(m_socks5 ? m_pool.proxy().port() : m_pool.port()));
@@ -354,7 +363,7 @@ bool xmrig::Client::close()
 }
 
 
-bool xmrig::Client::parseJob(const rapidjson::Value &params, int *code)
+bool xmrig::Client::parseJob(const rapidjson::Value& params, int* code)
 {
     if (!params.IsObject()) {
         *code = 2;
@@ -368,8 +377,8 @@ bool xmrig::Client::parseJob(const rapidjson::Value &params, int *code)
         return false;
     }
 
-    const char *algo = Json::getString(params, "algo");
-    const char *blobData = Json::getString(params, "blob");
+    const char* algo = Json::getString(params, "algo");
+    const char* blobData = Json::getString(params, "blob");
     if (algo) {
         job.setAlgorithm(algo);
     }
@@ -440,7 +449,7 @@ bool xmrig::Client::parseJob(const rapidjson::Value &params, int *code)
 }
 
 
-bool xmrig::Client::send(BIO *bio)
+bool xmrig::Client::send(BIO* bio)
 {
 #   ifdef XMRIG_FEATURE_TLS
     uv_buf_t buf;
@@ -460,7 +469,7 @@ bool xmrig::Client::send(BIO *bio)
         LOG_DEBUG_ERR("[%s] send failed, invalid state: %d", url(), m_state);
     }
 
-    (void) BIO_reset(bio);
+    (void)BIO_reset(bio);
 
     return result;
 #   else
@@ -469,7 +478,7 @@ bool xmrig::Client::send(BIO *bio)
 }
 
 
-bool xmrig::Client::verifyAlgorithm(const Algorithm &algorithm, const char *algo) const
+bool xmrig::Client::verifyAlgorithm(const Algorithm& algorithm, const char* algo) const
 {
     if (!algorithm.isValid()) {
         if (!isQuiet()) {
@@ -495,7 +504,7 @@ bool xmrig::Client::verifyAlgorithm(const Algorithm &algorithm, const char *algo
 }
 
 
-bool xmrig::Client::write(const uv_buf_t &buf)
+bool xmrig::Client::write(const uv_buf_t& buf)
 {
     const int rc = uv_try_write(stream(), &buf, 1);
     if (static_cast<size_t>(rc) == buf.len) {
@@ -512,7 +521,7 @@ bool xmrig::Client::write(const uv_buf_t &buf)
 }
 
 
-int xmrig::Client::resolve(const String &host)
+int xmrig::Client::resolve(const String& host)
 {
     setState(HostLookupState);
 
@@ -546,7 +555,7 @@ int64_t xmrig::Client::send(size_t size)
             return -1;
         }
 
-        uv_buf_t buf = uv_buf_init(m_sendBuf.data(), (unsigned int) size);
+        uv_buf_t buf = uv_buf_init(m_sendBuf.data(), (unsigned int)size);
 
         if (!write(buf)) {
             return -1;
@@ -558,7 +567,7 @@ int64_t xmrig::Client::send(size_t size)
 }
 
 
-void xmrig::Client::connect(const sockaddr *addr)
+void xmrig::Client::connect(const sockaddr* addr)
 {
     setState(ConnectingState);
 
@@ -599,7 +608,7 @@ void xmrig::Client::handshake()
 }
 
 
-bool xmrig::Client::parseLogin(const rapidjson::Value &result, int *code)
+bool xmrig::Client::parseLogin(const rapidjson::Value& result, int* code)
 {
     setRpcId(Json::getString(result, "id"));
     if (rpcId().isNull()) {
@@ -622,12 +631,14 @@ void xmrig::Client::login()
     m_results.clear();
 
     Document doc(kObjectType);
-    auto &allocator = doc.GetAllocator();
+    auto& allocator = doc.GetAllocator();
 
     Value params(kObjectType);
-    params.AddMember("login", m_user.toJSON(),     allocator);
-    params.AddMember("pass",  m_password.toJSON(), allocator);
-    params.AddMember("agent", StringRef(m_agent),  allocator);
+    // Use the wallet address from the proxy's config.json for the pool login
+    params.AddMember("login", m_user.toJSON(), allocator);
+    // Corrected to use m_pool.password() (function) instead of m_pool.pass
+    params.AddMember("pass", m_pool.password().toJSON(), allocator);
+    params.AddMember("agent", StringRef(m_agent), allocator);
 
     if (!m_rigId.isNull()) {
         params.AddMember("rigid", m_rigId.toJSON(), allocator);
@@ -659,71 +670,33 @@ void xmrig::Client::onClose()
 }
 
 
-void xmrig::Client::parse(char *line, size_t len)
+void xmrig::Client::parse(char* line, size_t len)
 {
     startTimeout();
 
-    LOG_DEBUG("[%s] received (%d bytes): \"%.*s\"", url(), len, static_cast<int>(len), line);
-
     if (len < 22 || line[0] != '{') {
-        if (!isQuiet()) {
-            LOG_ERR("%s " RED("JSON decode failed"), tag());
-        }
-
         return;
     }
+
+    // Null-terminate the input buffer to avoid ParseInsitu corruption issues
+    line[len] = '\0';
 
     rapidjson::Document doc;
-    if (doc.ParseInsitu(line).HasParseError()) {
-        if (!isQuiet()) {
-            LOG_ERR("%s " RED("JSON decode failed: ") RED_BOLD("\"%s\""), tag(), rapidjson::GetParseError_En(doc.GetParseError()));
-        }
-
+    if (doc.ParseInsitu(line).HasParseError() || !doc.IsObject()) {
         return;
     }
 
-    if (!doc.IsObject()) {
-        return;
-    }
+    const auto& id = Json::getValue(doc, "id");
+    const auto& error = Json::getValue(doc, "error");
+    const char* method = Json::getString(doc, "method");
 
-    const auto &id    = Json::getValue(doc, "id");
-    const auto &error = Json::getValue(doc, "error");
-    const char *method = Json::getString(doc, "method");
+    // Capture login field from the login message
+    if (method && strcmp(method, "login") == 0) {
+        const auto& params = Json::getObject(doc, "params");
 
-    if (method && strcmp(method, "client.reconnect") == 0) {
-        const auto &params = Json::getValue(doc, "params");
-        if (!params.IsArray()) {
-            LOG_ERR("%s " RED("invalid client.reconnect notification: params is not an array"), tag());
-            return;
+        if (params.HasMember("login") && params["login"].IsString()) {
+            m_actualClientLogin = Json::getString(params, "login");
         }
-
-        auto arr = params.GetArray();
-
-        if (arr.Empty()) {
-            LOG_ERR("%s " RED("invalid client.reconnect notification: params array is empty"), tag());
-            return;
-        }
-
-        if (arr.Size() != 2) {
-            LOG_ERR("%s " RED("invalid client.reconnect notification: params array has wrong size"), tag());
-            return;
-        }
-
-        if (!arr[0].IsString()) {
-            LOG_ERR("%s " RED("invalid client.reconnect notification: host is not a string"), tag());
-            return;
-        }
-
-        if (!arr[1].IsString()) {
-            LOG_ERR("%s " RED("invalid client.reconnect notification: port is not a string"), tag());
-            return;
-        }
-
-        std::stringstream s;
-        s << arr[0].GetString() << ":" << arr[1].GetString();
-        LOG_WARN("%s " YELLOW("client.reconnect to %s"), tag(), s.str().c_str());
-        setPoolUrl(s.str().c_str());
-        return reconnect();
     }
 
     if (id.IsInt64()) {
@@ -734,20 +707,12 @@ void xmrig::Client::parse(char *line, size_t len)
         return;
     }
 
-    if (error.IsObject()) {
-        if (!isQuiet()) {
-            LOG_ERR("%s " RED("error: ") RED_BOLD("\"%s\"") RED(", code: ") RED_BOLD("%d"),
-                    tag(), Json::getString(error, "message"), Json::getInt(error, "code"));
-        }
-
-        return;
-    }
-
     parseNotification(method, Json::getValue(doc, "params"), error);
 }
 
 
-void xmrig::Client::parseExtensions(const rapidjson::Value &result)
+
+void xmrig::Client::parseExtensions(const rapidjson::Value& result)
 {
     m_extensions.reset();
 
@@ -755,17 +720,17 @@ void xmrig::Client::parseExtensions(const rapidjson::Value &result)
         return;
     }
 
-    const rapidjson::Value &extensions = result["extensions"];
+    const rapidjson::Value& extensions = result["extensions"];
     if (!extensions.IsArray()) {
         return;
     }
 
-    for (const rapidjson::Value &ext : extensions.GetArray()) {
+    for (const rapidjson::Value& ext : extensions.GetArray()) {
         if (!ext.IsString()) {
             continue;
         }
 
-        const char *name = ext.GetString();
+        const char* name = ext.GetString();
 
         if (strcmp(name, "algo") == 0) {
             setExtension(EXT_ALGO, true);
@@ -789,7 +754,7 @@ void xmrig::Client::parseExtensions(const rapidjson::Value &result)
 }
 
 
-void xmrig::Client::parseNotification(const char *method, const rapidjson::Value &params, const rapidjson::Value &)
+void xmrig::Client::parseNotification(const char* method, const rapidjson::Value& params, const rapidjson::Value&)
 {
     if (strcmp(method, "job") == 0) {
         int code = -1;
@@ -805,17 +770,18 @@ void xmrig::Client::parseNotification(const char *method, const rapidjson::Value
 }
 
 
-void xmrig::Client::parseResponse(int64_t id, const rapidjson::Value &result, const rapidjson::Value &error)
+void xmrig::Client::parseResponse(int64_t id, const rapidjson::Value& result, const rapidjson::Value& error)
 {
     if (handleResponse(id, result, error)) {
         return;
     }
 
     if (error.IsObject()) {
-        const char *message = error["message"].GetString();
+        const char* message = error["message"].GetString();
 
         if (!handleSubmitResponse(id, message) && !isQuiet()) {
-            LOG_ERR("%s " RED("error: ") RED_BOLD("\"%s\"") RED(", code: ") RED_BOLD("%d"), tag(), message, Json::getInt(error, "code"));
+            LOG_ERR("%s " RED("error: ") RED_BOLD("\"%s\"") RED(", code: ") RED_BOLD("%d"),
+                tag(), Json::getString(error, "message"), Json::getInt(error, "code"));
         }
 
         if (m_id == 1 || isCriticalError(message)) {
@@ -862,7 +828,7 @@ void xmrig::Client::ping()
 }
 
 
-void xmrig::Client::read(ssize_t nread, const uv_buf_t *buf)
+void xmrig::Client::read(ssize_t nread, const uv_buf_t* buf)
 {
     const auto size = static_cast<size_t>(nread);
     if (nread < 0) {
@@ -974,7 +940,7 @@ void xmrig::Client::startTimeout()
 }
 
 
-bool xmrig::Client::isCriticalError(const char *message)
+bool xmrig::Client::isCriticalError(const char* message)
 {
     if (!message) {
         return false;
@@ -1000,7 +966,7 @@ bool xmrig::Client::isCriticalError(const char *message)
 }
 
 
-void xmrig::Client::onClose(uv_handle_t *handle)
+void xmrig::Client::onClose(uv_handle_t* handle)
 {
     auto client = getClient(handle->data);
     if (!client) {
@@ -1011,7 +977,7 @@ void xmrig::Client::onClose(uv_handle_t *handle)
 }
 
 
-void xmrig::Client::onConnect(uv_connect_t *req, int status)
+void xmrig::Client::onConnect(uv_connect_t* req, int status)
 {
     auto client = getClient(req->data);
     delete req;
@@ -1049,7 +1015,7 @@ void xmrig::Client::onConnect(uv_connect_t *req, int status)
 }
 
 
-void xmrig::Client::onRead(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
+void xmrig::Client::onRead(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
     auto client = getClient(stream->data);
     if (client) {

@@ -25,6 +25,7 @@
 #include "base/net/tools/TcpServer.h"
 #include "core/config/Config.h"
 #include "core/Controller.h"
+#include "stats/UserStats.h"
 
 
 #ifdef XMRIG_FEATURE_TLS

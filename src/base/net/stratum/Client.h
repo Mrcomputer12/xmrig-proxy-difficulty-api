@@ -125,6 +125,9 @@ private:
     static void onRead(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
 
     static inline Client *getClient(void *data) { return m_storage.get(data); }
+    String m_poolLoginUser;
+    xmrig::String m_actualClientLogin;
+
 
     const char *m_agent;
     LineReader m_reader;

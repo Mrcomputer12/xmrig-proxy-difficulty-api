@@ -40,6 +40,7 @@
 #include "proxy/events/CloseEvent.h"
 #include "proxy/events/LoginEvent.h"
 #include "proxy/events/SubmitEvent.h"
+#include "stats/UserStats.h"
 
 
 #ifdef XMRIG_FEATURE_TLS
@@ -196,7 +197,7 @@ bool xmrig::Miner::isWritable() const
 }
 
 
-bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson::Value &params)
+bool xmrig::Miner::parseRequest(int64_t id, const char* method, const rapidjson::Value& params)
 {
     if (!method || !params.IsObject()) {
         return false;
@@ -209,12 +210,12 @@ bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson:
 
             Algorithms algorithms;
             if (params.HasMember("algo")) {
-                const rapidjson::Value &value = params["algo"];
+                const rapidjson::Value& value = params["algo"];
 
                 if (value.IsArray()) {
                     algorithms.reserve(value.Size());
 
-                    for (const auto &i : value.GetArray()) {
+                    for (const auto& i : value.GetArray()) {
                         Algorithm algo(i.GetString());
                         if (!algo.isValid()) {
                             continue;
@@ -225,10 +226,12 @@ bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson:
                 }
             }
 
-            m_user     = Json::getString(params, "login");
+            m_user = Json::getString(params, "login");
             m_password = Json::getString(params, "pass");
-            m_agent    = Json::getString(params, "agent");
-            m_rigId    = Json::getString(params, "rigid");
+            m_agent = Json::getString(params, "agent");
+            m_rigId = Json::getString(params, "rigid");
+
+            printf("Client login from IP %s. User: %s, Rig ID: %s", m_ip, m_user.data(), m_rigId.data());
 
             LoginEvent::create(this, id, algorithms, params)->start();
             return true;
@@ -244,7 +247,7 @@ bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson:
     if (strcmp(method, "submit") == 0) {
         heartbeat();
 
-        const char *rpcId = Json::getString(params, "id");
+        const char* rpcId = Json::getString(params, "id");
         if (!rpcId || m_rpcId != rpcId) {
             replyWithError(id, Error::toString(Error::Unauthenticated));
             return true;
@@ -252,7 +255,11 @@ bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson:
 
         Algorithm algorithm(Json::getString(params, "algo"));
 
-        SubmitEvent *event = SubmitEvent::create(this, id, Json::getString(params, "job_id"), Json::getString(params, "nonce"), Json::getString(params, "result"), algorithm, Json::getString(params, "sig"), m_signatureData, m_viewTag, m_extraNonce);
+        SubmitEvent* event = SubmitEvent::create(this, id, Json::getString(params, "job_id"),
+            Json::getString(params, "nonce"),
+            Json::getString(params, "result"),
+            algorithm, Json::getString(params, "sig"),
+            m_signatureData, m_viewTag, m_extraNonce);
 
         if (!event->request.isValid() || event->request.actualDiff() < diff()) {
             event->setError(Error::LowDifficulty);
@@ -260,6 +267,18 @@ bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson:
         else if (hasExtension(EXT_NICEHASH) && !event->request.isCompatible(m_fixedByte)) {
             event->setError(Error::InvalidNonce);
         }
+
+        // Track share statistics using login as key
+        std::string loginKey = std::string(m_user.data());
+        uint64_t difficulty = event->request.actualDiff();
+
+        std::unique_lock<std::mutex> lock(userStatsMutex);
+        userDifficultyTotal[loginKey] += difficulty;
+
+        if (event->error() == Error::NoError) {
+            userAcceptedShares[loginKey]++;
+        }
+        lock.unlock();
 
         if (event->error() == Error::NoError && m_customDiff && event->request.actualDiff() < m_diff) {
             success(id, "OK");
@@ -286,7 +305,6 @@ bool xmrig::Miner::parseRequest(int64_t id, const char *method, const rapidjson:
     replyWithError(id, Error::toString(Error::InvalidMethod));
     return true;
 }
-
 
 bool xmrig::Miner::send(BIO *bio)
 {

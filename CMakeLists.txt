@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 project(xmrig-proxy)
 
 
-option(WITH_GOOGLE_BREAKPAD "Use Google Breakpad"     OFF)
-option(WITH_DEBUG_LOG       "Enable debug log output" OFF)
-option(WITH_HTTP            "HTTP protocol support (client/server)" ON)
-option(WITH_TLS             "Enable OpenSSL support"  ON)
-option(WITH_ENV_VARS        "Enable environment variables support in config file" ON)
+option(WITH_GOOGLE_BREAKPAD "Use Google Breakpad"      OFF)
+option(WITH_DEBUG_LOG      "Enable debug log output" OFF)
+option(WITH_HTTP           "HTTP protocol support (client/server)" ON)
+option(WITH_TLS            "Enable OpenSSL support"  ON)
+option(WITH_ENV_VARS       "Enable environment variables support in config file" ON)
 
 
 include(CheckIncludeFile)
@@ -68,7 +68,8 @@ set(HEADERS
     src/proxy/workers/Workers.h
     src/Summary.h
     src/version.h
-   )
+    src/stats/UserStats.h # New line
+    )
 
 set(SOURCES
     "${SOURCES_BASE}"
@@ -111,7 +112,8 @@ set(SOURCES
     src/proxy/workers/Workers.cpp
     src/Summary.cpp
     src/xmrig.cpp
-   )
+    src/stats/UserStats.cpp # New line
+    )
 
 if (WIN32)
     set(SOURCES_OS

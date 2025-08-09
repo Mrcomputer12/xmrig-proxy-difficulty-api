@@ -56,7 +56,9 @@ private:
     void getMiners(rapidjson::Value &reply, rapidjson::Document &doc) const;
     void getMinersSummary(rapidjson::Value &reply, rapidjson::Document &doc) const;
     void getResults(rapidjson::Value &reply, rapidjson::Document &doc) const;
-    void getWorkers(rapidjson::Value &reply, rapidjson::Document &doc) const;
+    void getWorkers(rapidjson::Value &reply, rapidjson::Document &doc) const;\
+    void getDiffStats(rapidjson::Value& reply, rapidjson::Document& doc) const; // New line
+    
 
     Base *m_base;
 };
